@@ -1,63 +1,71 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { IncludesLocator } from './includesLocator';
+import { DefinitionFinder } from './model/definitionFinder';
+import { FileIndexer } from './model/fileIndexer';
+import { JumpLocationFinder } from './model/jumpLocationFinder';
 
-export class XSDNavigator implements vscode.DocumentLinkProvider, vscode.DefinitionProvider {
+export class XSDNavigator implements vscode.DefinitionProvider {
+
+    private indexer: FileIndexer = new FileIndexer();
+    private definitionFinder: DefinitionFinder;
+
     constructor() {
+        this.indexer.RebuildIndex();
+        this.definitionFinder = new DefinitionFinder(this.indexer);
     }
+
     provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): vscode.ProviderResult<vscode.Location | vscode.Location[] | vscode.LocationLink[]> {
-        const results = new Array<vscode.LocationLink>();
-        const text = document.getText();
-        const locator = new IncludesLocator(text);
-        const matches = locator.GetMatches();
-        if (matches.length > 0) {
-
-            for (let i = 0; i < matches.length; i++) {
-                const match = matches[i];
-                const startIndex = match[0].length - match[1].length;
-                const startPos = document.positionAt(match.index + startIndex - 1);
-                const endPos = document.positionAt(match.index + startIndex + match[1].length - 1);
-
-                let targetPath = match[1];
-                if (!path.isAbsolute(targetPath)) {
-                    const dirName = path.dirname(document.uri.fsPath);
-                    targetPath = path.resolve(dirName, targetPath);
-                }
-                results.push({
-                    originSelectionRange: new vscode.Range(startPos, endPos),
-                    targetUri: vscode.Uri.file(targetPath),
-                    targetRange: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1))
-                })
-            }
-        }
-
-        return results;
+        return this.definitionFinder.Find(document, position, token);
     }
-    provideDocumentLinks(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.ProviderResult<vscode.DocumentLink[]> {
-        const results = new Array<vscode.DocumentLink>();
-        const text = document.getText();
-        const locator = new IncludesLocator(text);
-        const matches = locator.GetMatches();
-        if (matches.length > 0) {
 
-            for (let i = 0; i < matches.length; i++) {
-                const match = matches[i];
-                const startIndex = match[0].length - match[1].length;
-                const startPos = document.positionAt(match.index + startIndex - 1);
-                const endPos = document.positionAt(match.index + startIndex + match[1].length - 1);
 
-                let targetPath = match[1];
-                if (!path.isAbsolute(targetPath)) {
-                    const dirName = path.dirname(document.uri.fsPath);
-                    targetPath = path.resolve(dirName, targetPath);
-                }
-                results.push({
-                    range: new vscode.Range(startPos, endPos),
-                    target: vscode.Uri.file(targetPath)
-                })
-            }
-        }
+    public jumpTo() {
+        const finder = new JumpLocationFinder(this.indexer);
+        let currentDocument: vscode.TextDocument | undefined = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.document : undefined;
 
-        return results;
+        const preselectValue = path.basename(currentDocument?.uri.fsPath ?? '');
+        const locations = finder.GetLocations(preselectValue);
+        const picker = vscode.window.createQuickPick();
+        picker.title = "Jump To...";
+        picker.placeholder = "Select a file to open";
+        picker.items = locations;
+
+        picker.onDidChangeActive(async (e) => {
+            if (!e || e.length == 0)
+                return;
+            const item = e[0];
+            const uri = vscode.Uri.file(item.detail!);
+            const doc = await vscode.workspace.openTextDocument(uri);
+            vscode.window.showTextDocument(doc, vscode.ViewColumn.Active, true);
+        })
+        picker.onDidAccept(async () => {
+            if (!picker.selectedItems || picker.selectedItems.length == 0)
+                return;
+            const item = picker.selectedItems[0];
+            const uri = vscode.Uri.file(item.detail!);
+            const doc = await vscode.workspace.openTextDocument(uri);
+            const textEditor = await vscode.window.showTextDocument(doc);
+            if (textEditor)
+                currentDocument = textEditor.document;
+        });
+        picker.onDidHide(async () => {
+            if (currentDocument)
+                await vscode.window.showTextDocument(currentDocument);
+            else
+                await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        });
+
+        picker.show();
+    }
+
+
+    rebuild(textEditor: vscode.TextEditor | undefined) {
+        if (!textEditor)
+            return;
+        this.indexer.TryRebuild(textEditor.document);
+    }
+
+    update(document: vscode.TextDocument) {
+        this.indexer.TryUpdate(document);
     }
 }
