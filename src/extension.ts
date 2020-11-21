@@ -8,6 +8,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.languages.registerDefinitionProvider(Constants.Selector, navigator),
 		vscode.window.onDidChangeActiveTextEditor((e) => navigator.rebuild(e)),
+		vscode.workspace.onDidSaveTextDocument(() => navigator.rebuild(vscode.window.activeTextEditor, true)),
 		vscode.workspace.onDidChangeTextDocument((e) => navigator.update(e.document)),
 		vscode.commands.registerCommand(Constants.JumpToCommand, () => navigator.jumpTo()),
 	);

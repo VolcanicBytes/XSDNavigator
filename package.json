@@ -2,7 +2,7 @@
 	"name": "xsd-navigator",
 	"displayName": "XSD Navigator",
 	"description": "Navigate between includes",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"publisher": "VolcanicBytes",
 	"engines": {
 		"vscode": "^1.51.0"

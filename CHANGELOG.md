@@ -4,6 +4,10 @@ All notable changes to the "xsd-navigator" extension will be documented in this 
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## 0.2.1
+
+* 🔧 re-analyze schemaLocation upon save
+
 ## 0.2.0
 
 * ➕ multiple paths support

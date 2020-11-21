@@ -59,10 +59,14 @@ export class XSDNavigator implements vscode.DefinitionProvider {
     }
 
 
-    rebuild(textEditor: vscode.TextEditor | undefined) {
+    rebuild(textEditor: vscode.TextEditor | undefined, force: boolean = false) {
         if (!textEditor)
             return;
-        this.indexer.TryRebuild(textEditor.document);
+
+        if (force)
+            this.indexer.RebuildIndex();
+        else
+            this.indexer.TryRebuild(textEditor.document);
     }
 
     update(document: vscode.TextDocument) {
