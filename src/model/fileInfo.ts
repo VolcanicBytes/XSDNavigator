@@ -1,65 +1,90 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { NameLocator } from '../locators/nameLocator';
 import { FileItemLocation } from './fileItemLocation';
 import { TypeLocator } from '../locators/typeLocator';
 import { FileItemKind } from '../constants';
 import { IncludesLocator } from '../locators/includesLocator';
+import { HiddenFileUtils } from '../utils/hiddenFileUtils';
+import { Downloader } from '../utils/downloader';
+import { FileUtils } from '../utils/fileUtils';
 
 export class FileInfo {
-
+    static diag: vscode.DiagnosticCollection;
+    static diagnosticList: vscode.Diagnostic[] = [];
     private externalRefs: Array<FileItemLocation>;
     private typeLocations: Array<FileItemLocation>;
     private nameLocations: Array<FileItemLocation>;
+    spaceCount = 1;
+    schemeLocationLength = 24;
+
     constructor(public uri: vscode.Uri, public document: vscode.TextDocument, public text: string) {
         this.externalRefs = new Array();
         this.typeLocations = new Array();
         this.nameLocations = new Array();
 
         this.Parse(document);
+        FileInfo.diag = vscode.languages.createDiagnosticCollection('XSD-Navigator');
     }
     public Parse(document: vscode.TextDocument) {
         this.document = document;
         this.parseTypes(document);
         this.parseNames(document);
-        this.parseExternalRefs(document);
+        this.parseExternalRefs(document, this.externalRefs);
     }
 
-    private parseExternalRefs(document: vscode.TextDocument) {
+    private parseExternalRefs(document: vscode.TextDocument, externalRefs: Array<FileItemLocation>) {
         const locator = new IncludesLocator(this.text);
-        const locations = locator.GetMatches();
-        if (locations.length > 0) {
-            for (let i = 0; i < locations.length; i++) {
-                const match = locations[i];
-                const element = match[1];
-                let targetPath = element;
-                const startIndex = match[0].length - targetPath.length;
-                const startPos = document.positionAt(match.index + startIndex - 1);
-                const endPos = document.positionAt(match.index + startIndex + targetPath.length - 1);
+        const locationList = locator.GetMatches();
+        for (let locationIndex = 0; locationIndex < locationList.length; locationIndex++) {
+            const location = locationList[locationIndex];
+            const fullElement = location[1];
 
-                if (!path.isAbsolute(targetPath)) {
-                    const dirName = path.dirname(document.uri.fsPath);
-                    targetPath = path.resolve(dirName, targetPath);
+            const subElements = fullElement.split(' ');
+            const subElementsCount = subElements.length;
+
+            let offset = this.schemeLocationLength;
+            for (let index = 0; index < subElementsCount; index++) {
+                let elementPath = subElements[index];
+                const startIndex = location.index + offset;
+                const startPos = document.positionAt(startIndex);
+                const endPos = document.positionAt(startIndex + elementPath.length);
+                const uri = vscode.Uri.parse(elementPath);
+                const scheme = uri.scheme;
+                if (scheme != 'file') {
+                    const dest = HiddenFileUtils.MakeSureHiddenFolderExists(document);
+                    const filePath = FileUtils.TranslateLocation(uri.path, dest);
+                    if (FileUtils.CheckIfFileExist(filePath)) {
+                        FileInfo.appendLocation(elementPath, filePath, startPos, endPos, externalRefs);
+                    }
+                    else {
+                        Downloader.downloadFile(elementPath, filePath, startPos, endPos, document.uri, elementPath, externalRefs);
+                    }
                 }
-
-
-                const location = new FileItemLocation(element, FileItemKind.File, vscode.Uri.file(targetPath), new vscode.Range(startPos, endPos));
-                location.resolved = true;
-                location.originSelectionRange = new vscode.Range(startPos, endPos);
-                location.targetUri = vscode.Uri.file(targetPath);
-                location.targetRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1));
-                this.externalRefs.push(
-                    location
-                    //     {
-                    //     originSelectionRange: new vscode.Range(startPos, endPos),
-                    //     targetUri: vscode.Uri.file(targetPath),
-                    //     targetRange: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1))
-                    // }
-                )
+                else {
+                    const targetPath = FileUtils.GetAbsolutePath(elementPath, document.uri.fsPath);
+                    FileInfo.appendLocation(elementPath, targetPath, startPos, endPos, externalRefs);
+                }
+                offset += elementPath.length + this.spaceCount;
             }
         }
 
     }
+
+    public static createDiagnoseResult(message: string, range: vscode.Range, severity: vscode.DiagnosticSeverity = vscode.DiagnosticSeverity.Information): vscode.Diagnostic {
+        let diag = new vscode.Diagnostic(range, message);
+        diag.severity = severity;
+        return diag;
+    }
+
+    public static appendLocation(element: string, filePath: string, startPos: vscode.Position, endPos: vscode.Position, externalRefs: Array<FileItemLocation>) {
+        const location = new FileItemLocation(element, FileItemKind.File, vscode.Uri.file(filePath), new vscode.Range(startPos, endPos));
+        location.resolved = true;
+        location.originSelectionRange = new vscode.Range(startPos, endPos);
+        location.targetUri = vscode.Uri.file(filePath);
+        location.targetRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1));
+        externalRefs.push(location);
+    }
+
     private parseNames(document: vscode.TextDocument) {
         const locator = new NameLocator(this.text);
         const locations = locator.GetMatches();

@@ -14,6 +14,7 @@ export class FileIndexer {
 
     public async RebuildIndex() {
         const self = this;
+        FileInfo.diagnosticList = [];
         await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: 'rebuilding xsd index...' }, async (progress) => {
             progress.report({ message: 'checking current file...', increment: 20 });
             const editor = vscode.window.activeTextEditor;

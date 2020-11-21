@@ -4,7 +4,6 @@ import { XSDNavigator } from './xsdNavigator';
 
 export function activate(context: vscode.ExtensionContext) {
 	vscode.commands.executeCommand('setContext', Constants.Context, true);
-
 	const navigator: XSDNavigator = new XSDNavigator();
 	context.subscriptions.push(
 		vscode.languages.registerDefinitionProvider(Constants.Selector, navigator),
