@@ -4,6 +4,11 @@ All notable changes to the "xsd-navigator" extension will be documented in this 
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## 0.3.0
+
+* ➕ located base attribute values too
+* ➕icon
+
 ## 0.2.1
 
 * 🔧 re-analyze schemaLocation upon save

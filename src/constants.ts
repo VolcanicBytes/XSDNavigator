@@ -17,4 +17,5 @@ export enum FileItemKind {
     Name,
     Type,
     File,
+    Base
 }

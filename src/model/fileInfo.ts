@@ -7,12 +7,14 @@ import { IncludesLocator } from '../locators/includesLocator';
 import { HiddenFileUtils } from '../utils/hiddenFileUtils';
 import { Downloader } from '../utils/downloader';
 import { FileUtils } from '../utils/fileUtils';
+import { BaseLocator } from '../locators/baseLocator';
 
 export class FileInfo {
     static diag: vscode.DiagnosticCollection;
     static diagnosticList: vscode.Diagnostic[] = [];
     private externalRefs: Array<FileItemLocation>;
     private typeLocations: Array<FileItemLocation>;
+    private baseLocations: Array<FileItemLocation>;
     private nameLocations: Array<FileItemLocation>;
     spaceCount = 1;
     schemeLocationLength = 24;
@@ -20,6 +22,7 @@ export class FileInfo {
     constructor(public uri: vscode.Uri, public document: vscode.TextDocument, public text: string) {
         this.externalRefs = new Array();
         this.typeLocations = new Array();
+        this.baseLocations = new Array();
         this.nameLocations = new Array();
 
         this.Parse(document);
@@ -29,6 +32,7 @@ export class FileInfo {
         this.document = document;
         this.parseTypes(document);
         this.parseNames(document);
+        this.parseBases(document);
         this.parseExternalRefs(document, this.externalRefs);
     }
 
@@ -115,6 +119,21 @@ export class FileInfo {
             }
         }
     }
+    private parseBases(document: vscode.TextDocument) {
+        const locator = new BaseLocator(this.text);
+        const locations = locator.GetMatches();
+        if (locations.length > 0) {
+            for (let i = 0; i < locations.length; i++) {
+                const match = locations[i];
+                const element = match[1];
+                const startIndex = match[0].length - element.length;
+                const startPos = document.positionAt(match.index + startIndex - 1);
+                const endPos = document.positionAt(match.index + startIndex + element.length - 1);
+
+                this.baseLocations.push(new FileItemLocation(element, FileItemKind.Base, document.uri, new vscode.Range(startPos, endPos)));
+            }
+        }
+    }
 
     public TryGetHoveredType(position: vscode.Position, token: vscode.CancellationToken) {
         const locationList = this.typeLocations;
@@ -128,6 +147,23 @@ export class FileInfo {
                     typeElement.TryResolve(this.nameLocations, token);
                 }
                 return typeElement;
+            }
+        }
+        return undefined;
+    }
+
+    public TryGetHoveredBase(position: vscode.Position, token: vscode.CancellationToken) {
+        const baseList = this.baseLocations;
+        const BaseCount = baseList.length;
+        for (let i = 0; i < BaseCount; i++) {
+            const baseElement = baseList[i];
+            if (token.isCancellationRequested)
+                return;
+            if (baseElement.range.contains(position)) {
+                if (!baseElement.resolved) {
+                    baseElement.TryResolve(this.nameLocations, token);
+                }
+                return baseElement;
             }
         }
         return undefined;

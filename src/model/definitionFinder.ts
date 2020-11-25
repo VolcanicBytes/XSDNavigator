@@ -31,6 +31,17 @@ export class DefinitionFinder {
             if (externalRefElement) {
                 results.push(externalRefElement);
             }
+            else {
+                const baseElement = fileInfo.TryGetHoveredBase(position, token);
+                if (baseElement) {
+                    if (!baseElement.resolved)
+                        this.tryResolve(baseElement, fileInfo.uri, token);
+
+                    if (baseElement.resolved)
+                        results.push(baseElement);
+                }
+
+            }
         }
 
         return results;
